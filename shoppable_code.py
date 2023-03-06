@@ -15,6 +15,7 @@ import numpy as np
 import time
 import wget
 from datetime import datetime
+from bs4 import beautifulsoap
 start_time = datetime.now()
 
 
