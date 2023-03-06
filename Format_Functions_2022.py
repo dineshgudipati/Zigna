@@ -175,7 +175,11 @@ def wideFormat1018(CNames):
                                             for i in FINAL.columns.tolist():
                                                 if str(i) == str(r[0]):
                                                     FINAL.rename(columns={i:r[1]}, inplace=True)
+                                            
                                         except:
+                                            if str(k[1]) == str(r[2]):
+                                                for i in Final.columns.tolist():
+                                                    Final.rename(columns = {i :r[1]}, inplace = True)
                                             pass
                             for i in FINAL.columns.tolist():
 
