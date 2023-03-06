@@ -130,6 +130,17 @@ Appendix_E
 k = Appendix_E.pop('MS-DRG1').str.findall('\d+')
 
 
+##### edited for db ## = 06/03/2023
+
+Appendix_F["drg_document"] = np.where((Appendix_E ["Ms_drg"] == True), Appendix_R.fillna(method = :ffill", inplace = True)
+
+k = Append_E.pop('Ms_drg').str.findall('/d')
+
+
+#############dbmd#
+																					 
+
+
 b = [(i, x) for i, (a, b) in k.items() for x in range(int(a), int(b) + 1)]
 
 k = pd.DataFrame(b).set_index(0)[1].rename('DRG1')
