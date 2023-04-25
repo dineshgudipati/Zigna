@@ -1,0 +1,240 @@
+
+import sys
+
+import urllib3
+
+from airflow.models import Variable
+from acq.sf_acq.src.ECProcessor import *
+from acq.sf_acq.src.entity import *
+from acq.sf_acq.src.picklist import ECPickList
+
+from airflow import DAG
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.hooks.postgres_hook import PostgresHook
+from airflow.operators.email_operator import send_email
+from airflow.operators.python_operator import PythonOperator
+import airflow
+from airflow.hooks.base_hook import BaseHook
+from datetime import timedelta
+import datetime as dt
+from common.utils_ssh import execute,execute_by_pkey
+import logging
+
+from common.utils_datetime import  utc_crontab
+
+args = {
+    'owner': 'DAU-S&I Data & Product Engineering',
+    'depends_on_past': False,
+    'start_date': airflow.utils.dates.days_ago(1),
+    'email': ['nesan.Kamalanesan@iag.com.au','Derek.Chung@iag.com.au'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'catchup': False,
+    'retries': 0
+}
+
+daylight_saving = Variable.get('daylight_saving')
+
+dag = DAG(
+    'EC_GP_acquisition_prod_full',
+    default_args=args,
+    schedule_interval=utc_crontab('0 8 * * *',daylight_saving),
+    #schedule_interval='0 22,0,2,4,6,8,10 * * *',
+    max_active_runs=1,concurrency=1)
+
+'''
+def entity_acq_callback(**kwargs):
+
+    config=Variable.get("ec_sf_config_file").strip()
+    picklist=Variable.get("ec_sf_entity_picklist_file").strip()
+
+    ec_entity = ECEntity(config, picklist)
+    ec_entity.process_entities()
+
+    print('..............successfully run..............')
+'''
+
+start_task = DummyOperator(
+    task_id='start_task',
+    dag=dag
+)
+def entity_acq_callback(**kwargs):
+
+
+
+
+    config='/usr/local/airflow/.secret/EC/sf_acq_config_prod_full.ini'
+    picklist=Variable.get("ec_sf_entity_picklist_file").strip()
+
+    ec_entity = ECProcessor(config, picklist)
+    ec_entity.process_entities()
+
+    print('..............successfully run..............')
+
+
+start_task = DummyOperator(
+    task_id='start_task',
+    dag=dag
+)
+
+'''
+def entity_callback(**kwargs):
+
+
+
+    ctl_dict=kwargs.get('ctl_dict')
+    configfile = kwargs.get('configfile')
+    picklist = kwargs.get('picklist')
+
+    entity = ECEntity(configfile, picklist, ctl_dict)
+    entity.process()
+
+
+
+def get_ent_task(ctl_dict,configfile, picklist):
+    return PythonOperator(
+        task_id=ctl_dict['entity']+'_acq_task',
+        python_callable=entity_callback,
+        provide_context=True,
+        op_kwargs={"ctl_dict": ctl_dict, 'configfile':configfile,'picklist':picklist},
+        dag=dag,
+    )
+'''
+def ssh_gpload_callback_abcej( **kwargs):
+
+
+    connection = BaseHook.get_connection("acq_gpload_ssh_conn_id")
+    host = connection.host
+    user = connection.login
+    #passw = connection.password
+    xcom = 'sh /home/cloud-user/load_scripts/sf_load_prod.sh abcej '
+    status,out,err = execute_by_pkey(host, user, '/usr/local/airflow/.secret/acq-gpload.pem', xcom)
+
+
+
+    if err !='':
+        logging.error(err)
+        raise ValueError("System Error in SSH Command..")
+
+    if out != '' and out is not None and '|ERROR|' in out:
+        raise ValueError("Some errors occured in loading, Please check the GP Loader logs...")
+
+def ssh_gpload_callback_fhp(**kwargs):
+
+        connection = BaseHook.get_connection("acq_gpload_ssh_conn_id")
+        host = connection.host
+        user = connection.login
+        # passw = connection.password
+        xcom = 'sh /home/cloud-user/load_scripts/sf_load_prod.sh fhp '
+        status, out, err = execute_by_pkey(host, user, '/usr/local/airflow/.secret/acq-gpload.pem', xcom)
+
+        if err != '':
+            logging.error(err)
+            raise ValueError("System Error in SSH Command..")
+
+        if out != '' and out is not None and '|ERROR|' in out:
+            raise ValueError("Some errors occured in loading, Please check the GP Loader logs...")
+
+
+def ssh_gpload_callback_tuw(**kwargs):
+    connection = BaseHook.get_connection("acq_gpload_ssh_conn_id")
+    host = connection.host
+    user = connection.login
+    # passw = connection.password
+    xcom = 'sh /home/cloud-user/load_scripts/sf_load_prod.sh tuw '
+    status, out, err = execute_by_pkey(host, user, '/usr/local/airflow/.secret/acq-gpload.pem', xcom)
+
+    if err != '':
+        logging.error(err)
+        raise ValueError("System Error in SSH Command..")
+
+    if out != '' and out is not None and '|ERROR|' in out:
+        raise ValueError("Some errors occured in loading, Please check the GP Loader logs...")
+
+    # count rows inserted
+
+ssh_task_abcej = PythonOperator(
+    task_id='ssh_gpload_abcej',
+    python_callable=ssh_gpload_callback_abcej,
+    provide_context=True,
+    dag=dag,
+)
+
+
+ssh_task_fhp = PythonOperator(
+    task_id='ssh_gpload_fhp',
+    python_callable=ssh_gpload_callback_fhp,
+    provide_context=True,
+    dag=dag,
+)
+
+
+ssh_task_tuw = PythonOperator(
+    task_id='ssh_gpload_tuw',
+    python_callable=ssh_gpload_callback_tuw,
+    provide_context=True,
+    dag=dag,
+)
+
+def picklist_acq_callback(**kwargs):
+
+    config='/usr/local/airflow/.secret/EC/sf_acq_config_prod_full.ini'
+    picklist=Variable.get("ec_sf_entity_picklist_file").strip()
+    pick = ECPickList(config,picklist)
+    pick.process_picklsts()
+    print('..............successfully run..............')
+
+picklist_task = PythonOperator(
+        task_id='picklist_acq_task',
+        python_callable=picklist_acq_callback,
+        provide_context=True,
+        dag=dag,
+    )
+'''
+def process_entities():
+    config = Variable.get("ec_sf_config_file_dev").strip()
+    picklist = Variable.get("ec_sf_entity_picklist_file").strip()
+
+    processor = ECProcessor(config, picklist)
+
+    entities = processor.get_ctl_table_entries()
+
+    before_task=start_task
+
+    for ctl_dict in entities:
+        cur_task=get_ent_task(ctl_dict, config, picklist)
+        before_task>>cur_task>>picklist_task
+        #before_task=cur_task
+
+
+    #return before_task
+
+'''
+
+
+
+
+
+
+entity_task = PythonOperator(
+    task_id='entity_acq_task',
+    python_callable=entity_acq_callback,
+    provide_context=True,
+    dag=dag,
+)
+
+
+
+
+   # return status
+
+
+
+#process_entities()
+
+start_task>>entity_task>>picklist_task
+
+picklist_task>>ssh_task_abcej
+picklist_task>>ssh_task_tuw
+picklist_task>>ssh_task_fhp
+
