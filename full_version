@@ -1,0 +1,253 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Apr 20 18:12:06 2023
+
+@author: si736338
+"""
+
+import requests
+import datetime
+from datetime import timedelta
+import pandas as pd
+
+#refernce table is the configuration file which has all the parameters required for the extraction
+
+
+
+
+
+
+
+reference = pd.read_csv('Main_reference.csv', index_col = 0)
+
+result_df_MEP = pd.DataFrame()
+result_df_ABT = pd.DataFrame()
+result_df_keystat = pd.DataFrame()
+result_df_Ht = pd.DataFrame()
+result_df_GA = pd.DataFrame()
+result_df_Ip = pd.DataFrame()
+
+
+
+
+# loop over each row in the Excel sheet
+for i, row in reference.iterrows():
+    function_name = row['function_name']
+    mode_id = row['ModeID']
+    headcount = row['head_count']
+    Sort = row['Sort']
+    mode = row['mode']
+    token = row["token"]
+    days_interval_str = row["date_interval"]  # read days_interval as string
+    days_interval_list = [int(x) for x in days_interval_str.split(",")]  # split and convert to integers
+    
+    token = token
+    function_name = function_name
+    intervals = [{'days': days} for days in days_interval_list]
+        
+    
+
+    # loop over each interval and make the API request
+
+    for interval in intervals:
+        today = datetime.date.today()
+        date_to = today - timedelta(**interval)
+
+        # update the query parameters with the current row's data and the date range
+        query_params = {
+            "ModeID": mode_id,
+            "HeadCount": headcount,
+            "Sort" : Sort,
+            "DateFrom": date_to.strftime("%Y-%m-%d"),
+            "DateTo": today.strftime("%Y-%m-%d")}
+
+
+        mode = mode
+            
+    
+        
+       
+        # Construct the API URL
+        url = f"https://iag.swoopanalytics.com/v1/api/{mode}/{function_name}"
+        
+        # Add the token to the headers
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+        
+        # Make the API request
+        response = requests.get(url, params=query_params, headers=headers, verify=False)
+        
+        # Print the response
+        print(f"Data extracted for {interval['days']} days ago:")
+        # print(response.json())
+        json_data = response.json()
+            
+        
+        
+        if function_name == "MostEngagingPosts":
+        
+
+            json_data_df = json_data['Result']['Results']
+            json_data_df =  pd.DataFrame(json_data_df)
+    
+    
+            df_t = json_data_df.transpose()
+            df_t = df_t.reset_index(drop=False)
+    
+            df_t = df_t.rename(columns={'index': 'userid'})
+            df_t['interval_days'] = interval['days']
+            # Add the DataFrame to the result DataFrame
+            result_df_MEP = pd.concat([result_df_MEP, df_t], ignore_index=True)
+        result_df_MEP['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+
+        file = directory + "MostEngagingPosts" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+
+        result_df_MEP.to_csv(file, index= True)
+        
+        
+        if function_name == "ActivityByTime":
+            json_data_df = pd.DataFrame.from_records(json_data['Result'])
+
+
+            json_data_df['points'] = json_data_df['points'].astype(str)
+            
+            # Split the column containing the words by the comma delimiter
+            split_words = json_data_df['points'].str.split(',')
+            
+            # Create two new columns to hold the separated words
+            json_data_df['x'] = ''
+            json_data_df['y'] = ''
+            
+            # Assign the first and second word to the new columns
+            json_data_df['x'] = split_words.str[0]
+            json_data_df['y'] = split_words.str[1]
+            
+            
+            json_data_df['x'] = json_data_df['x'].str.replace(r'[^0-9]+', '')
+            json_data_df['y'] = json_data_df['y'].str.replace(r'[^0-9]+', '')
+            
+            json_data_df['interval_days'] = interval['days']
+            # Add the DataFrame to the result DataFrame
+            result_df_ABT = pd.concat([result_df_ABT, json_data_df], ignore_index=True)
+            
+        result_df_ABT['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+   
+        file = directory + "ActivityByTime" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+   
+        result_df_ABT.to_csv(file, index= True)
+        
+        
+        if function_name == "KeyStats":
+            # data_frame = pd.DataFrame({
+            #     'key1': [json_data['Result']['To']],
+            #     'key2': [json_data['Result']['NA']]
+            # })
+            
+            additional_data = json_data['Result']["NA"]
+            add_data = json_data["Result"]["To"]
+            df =  pd.DataFrame(add_data, index=[0])
+            df1 = pd.DataFrame(additional_data, index = [0])
+            
+            final_df = pd.concat([df,df1], ignore_index = False, axis=1)
+            final_df['interval_days'] = interval['days']
+            # Add the DataFrame to the result DataFrame
+            result_df_keystat = pd.concat([result_df_keystat, final_df], ignore_index=True)
+       
+        result_df_keystat['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+   
+        file = directory + "keyStats" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+   
+        result_df_keystat.to_csv(file, index= True)
+        
+        
+        
+        
+        if function_name == "HotTopics":
+            json_data_df = json_data['Result']['Results']
+            json_data_df =  pd.DataFrame(json_data_df)
+
+
+            df_t = json_data_df.transpose()
+            df_t = df_t.reset_index(drop=False)
+
+            df_t = df_t.rename(columns={'index': 'userid'})
+            df_t['interval_days'] = interval['days']
+            # Add the DataFrame to the result DataFrame
+            result_df_Ht = pd.concat([result_df_Ht, df_t], ignore_index=True)
+
+        result_df_Ht['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+   
+        file = directory + "HotTopics" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+   
+        result_df_Ht.to_csv(file, index= True)
+        
+        
+        
+        
+        
+        
+        if function_name == "GroupActivity":
+            json_data_df = pd.DataFrame.from_records(json_data['Result'])
+            
+         
+            df_t = json_data_df.transpose()
+            df_t = df_t.reset_index(drop=False)
+            df_t['interval_days'] = interval['days']
+            
+            # Add the DataFrame to the result DataFrame
+            result_df_GA = pd.concat([result_df_GA, df_t], ignore_index=True)
+        
+        result_df_GA['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+   
+        file = directory + "GroupActivity" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+   
+        result_df_GA.to_csv(file, index= True)
+        
+        
+        
+        if function_name == "InfluentialPeople":
+            json_data = json_data['Result']
+            df =  pd.DataFrame(json_data)
+            
+            # print the resulting table
+            print(df)
+            
+            df['Results'] = df['Results'].astype(str)
+            
+            # Split the column containing the words by the comma delimiter
+            split_words = df['Results'].str.split(',')
+            
+            # Create two new columns to hold the separated words
+            df['Engage'] = ''
+            df['followers'] = ''
+            
+            # Assign the first and second word to the new columns
+            df['Engage'] = split_words.str[0]
+            df['followers'] = split_words.str[1]
+            df['Engage'] = df['Engage'].str.replace(r'[^0-9]+', '')
+            df['followers'] = df['followers'].str.replace(r'[^0-9]+', '')
+            
+            df = df.reset_index(drop=False)
+            df = df.rename(columns={'index': 'userid'})
+            df['interval_days'] = interval['days']
+            
+            # Add the DataFrame to the result DataFrame
+            result_df_Ip = pd.concat([result_df_Ip, df], ignore_index=True)
+
+
+        result_df_Ip['Execution Date'] =datetime.datetime.now()
+        directory = r"C:\Users\si736338\Final\result_sheets\\"
+   
+        file = directory + "InfluentialPeople" + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
+   
+        result_df_Ip.to_csv(file, index= True)
+   
+       
+
+    
