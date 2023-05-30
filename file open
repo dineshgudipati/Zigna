@@ -1,0 +1,17 @@
+for filename in os.listdir(csv_directory):
+    if filename.endswith('.csv'):
+        file_path = os.path.join(csv_directory, filename)
+        with open(file_path, 'r') as file:
+            # Skip the header row if needed
+            next(file)
+            
+            # Create the table in the database with appropriate column names and types
+            table_name = filename[:-4]  # Remove the '.csv' extension from the filename
+            create_table_query = f"CREATE TABLE {table_name} (column1 datatype1, column2 datatype2, ...)"
+            cursor.execute(create_table_query)
+            
+            # Copy the data from the CSV file into the table
+            copy_query = f"COPY {table_name} FROM STDIN DELIMITER ',' CSV HEADER"
+            cursor.copy_expert(copy_query, file)
+            
+        conn.commit()
