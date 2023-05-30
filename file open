@@ -5,13 +5,16 @@ for filename in os.listdir(csv_directory):
             # Skip the header row if needed
             next(file)
             
-            # Create the table in the database with appropriate column names and types
+            # Get the table name from the CSV file name
             table_name = filename[:-4]  # Remove the '.csv' extension from the filename
-            create_table_query = f"CREATE TABLE {table_name} (column1 datatype1, column2 datatype2, ...)"
-            cursor.execute(create_table_query)
             
-            # Copy the data from the CSV file into the table
-            copy_query = f"COPY {table_name} FROM STDIN DELIMITER ',' CSV HEADER"
-            cursor.copy_expert(copy_query, file)
+            # Prepare the SQL INSERT statement
+            insert_query = f"INSERT INTO {table_name} (column1, column2, ...) VALUES %s"
+            
+            # Read the CSV data and convert it into a list of tuples
+            data = [tuple(line.strip().split(',')) for line in file]
+            
+            # Execute the INSERT statement with the data
+            cursor.executemany(insert_query, data)
             
         conn.commit()
