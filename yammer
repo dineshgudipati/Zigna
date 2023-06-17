@@ -1,0 +1,138 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 16 15:03:46 2023
+
+@author: si736338
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 16 13:19:56 2023
+
+@author: si736338
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 16 13:14:59 2023
+
+@author: si736338
+"""
+
+import requests
+import zipfile
+import io
+import os
+import csv
+import psycopg2
+import zipfile
+import datetime
+from datetime import date,timedelta, datetime
+
+import os
+import pandas as pd
+import numpy as np
+
+
+
+# Bearer token for authentication
+bearer_token = "39881-WpJ9XayUXeK6IVXSnvHg"
+
+# =============================================================================
+# # Greenplum database connection details
+# host="iagdcanonprod.auiag.corp",
+# port="5432",
+# database="iadpdev",
+# user="sys_swoop_analytics",
+# password="FBXzuq244#<("
+# =============================================================================
+
+# Define the start and end dates
+start_date = date(2023, 6, 1)
+end_date = date.today()
+
+# Generate dates for every three months
+# Generate dates for every three months
+dates = []
+current_date = start_date
+today = datetime.now()
+while current_date < end_date:
+    dates.append(current_date)
+    current_date += timedelta(days=3)  # Add 90 days for three months
+
+# Include the end date if the difference is less than 90 days
+if (end_date - current_date).days < 3:
+    dates.append(end_date)
+
+# Specify your desired output path
+output_path = "C:/Users/si736338/Final/result_sheets/hottopics/yammerexport"
+
+# Rest of your code...
+
+# Iterate over the dates and make API requests
+for i in range(len(dates) - 1):
+    since_date = start_date
+    to_date = start_date + timedelta(days=3)
+    
+    url = f"https://www.yammer.com/api/v1/export?since={since_date}&to={to_date}"
+    headers = {
+        "Authorization": f"Bearer {bearer_token}"
+    }
+
+    response = requests.get(url, headers=headers, verify=False)
+    
+    # Save the response content as a zip file
+    
+    with open(output_path, 'wb') as f:
+        zip_path = f"output_{since_date}_{to_date}.zip"
+        f.write(response.content)
+        
+files_to_extract = [ 'Groups.csv', 'Messages.csv', 'Tags.csv', 'Topics.csv', 'Users.csv']
+#
+output_directory = 'C:/Users/si736338/Final/result_sheets/hottopics/yammerexport'  
+  # Extract the files from the zip file
+with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+  for file_to_extract in files_to_extract:
+      if file_to_extract in zip_ref.namelist():
+          zip_ref.extract(file_to_extract, output_directory)
+          print(f"Extracted {file_to_extract} successfully!")
+      else:
+          print(f"{file_to_extract} not found in the zip file.",{since_date})   
+
+
+
+directory = 'C:/Users/si736338/Final/result_sheets/hottopics/yammerexport'
+  
+  
+    
+    
+    # Get all file names in the directory
+    file_names = os.listdir(directory)
+    today =  datetime.now().strftime("%Y%m%d%H%M%S")
+    # datetime_str = today.strftime('%Y%m%d%H%M%S')
+    # Iterate over each file name
+    for file_name in file_names:
+        if file_name.endswith('.csv'):
+            # Construct the file path
+            file_path = os.path.join(directory, file_name)
+            
+            # Read the CSV file
+            df = pd.read_csv(file_path)
+            
+            # Add new columns to the data frame
+            df['DateFrom'] = since_date
+            df['DateTo'] = to_date
+            df['ctl_ins_ts'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            df["ctl_elt_job_id"] = np.nan
+            df["ctl_src_cd"] = "swoop_analytics"
+            df["src_filename".upper()] = f"{file_name.split('.')[0]}_{since_date}.csv"
+            df['src_line_no'] = df.index
+            
+            # Save the updated data frame to a new CSV file
+            
+            new_file_name = f"{file_name.split('.')[0]}_{since_date}.csv"
+            # new_file_name = new_file_name.replace(':', '_')
+            new_file_path = os.path.join(directory, new_file_name)
+            
+            # Save the updated data frame to a new CSV file
+            df.to_csv(new_file_path, index=False)
