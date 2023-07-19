@@ -115,8 +115,11 @@ import logging
                         # Read the extracted CSV file into a DataFrame
                         df = pd.read_csv(file)
                         
+                   # Strip the ".csv" extension from the file name for matching with the reference
+                    file_to_match = file_to_extract.replace('.csv', '')
+                    
                     # Get the entity columns for the current file from the reference file
-                    entity_columns = reference.loc[reference['File name'] == file_to_extract]['entity columns'].values[0]
+                    entity_columns = reference_df.loc[reference_df['File name'] == file_to_match]['entity columns'].values[0]
                     entity_columns = [col.strip() for col in entity_columns.split(',')]
                     
                     # Select the columns present in both the DataFrame and the entity columns
