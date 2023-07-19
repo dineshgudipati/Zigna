@@ -1,77 +1,141 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jul  4 12:38:41 2023
+
+@author: si736338
+"""
+
 import requests
 from datetime import date, timedelta
 import os
 import zipfile
 import pandas as pd
 import numpy as np
-from datetime import datetime
+import yaml
+import datetime
 
-# Bearer token for authentication
-bearer_token = "39881-WpJ9XayUXeK6IVXSnvHg"
+import psycopg2
+import logging
 
-# Define the start and end dates
-start_date = date(2023, 6, 1)
-end_date = date.today()
+# 
 
-# Generate dates for every three days
-dates = []
-current_date = start_date
-while current_date < end_date:
-    dates.append(current_date)
-    current_date += timedelta(days=3)
-
-# Include the end date if the difference is less than 3 days
-if (end_date - current_date).days < 3:
-    dates.append(end_date)
-
-# Specify your desired output path
-output_path = "C:/Users/si736338/Final/result_sheets/hottopics/yammerexport"
-
-# Specify the CSV files to extract from each zip file
-files_to_extract = ['Groups.csv', 'Messages.csv', 'Tags.csv', 'Topics.csv', 'Users.csv']
-
-# Iterate over the dates and make API requests
-for i in range(len(dates) - 1):
-    since_date = dates[i]
-    to_date = dates[i] + timedelta(days=2)  # Add 2 days to cover the three-day period
-
-    url = f"https://www.yammer.com/api/v1/export?since={since_date}&to={to_date}"
-    headers = {
-        "Authorization": f"Bearer {bearer_token}"
-    }
-
-    response = requests.get(url, headers=headers, verify=False)
-
-    # Save the response content as a zip file
-    zip_filename = f"output_{since_date}.zip"
-    zip_filepath = os.path.join(output_path, zip_filename)
-
-    with open(zip_filepath, 'wb') as f:
-        f.write(response.content)
-
-    print(f"Zip file saved: {zip_filepath}")
-
-    # Extract specific CSV files from the zip file and modify them
-    with zipfile.ZipFile(zip_filepath, 'r') as zip_file:
-        for file_to_extract in files_to_extract:
-            if file_to_extract in zip_file.namelist():
-                csv_file = zip_file.extract(file_to_extract, path=output_path)
-
-                # Read the extracted CSV file into a DataFrame
-                df = pd.read_csv(csv_file)
-
-                # Add new columns to the DataFrame
-                df['DateFrom'] = since_date
-                df['DateTo'] = to_date
-                df['ctl_ins_ts'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                df["ctl_elt_job_id"] = np.nan
-                df["ctl_src_cd"] = "swoop_analytics"
-                df["src_filename".upper()] = f"{file_to_extract.split('.')[0]}_{since_date}.csv"
-                df['src_line_no'] = df.index
-                
-                # Save the updated DataFrame to a new CSV file
-                new_file_name = f"{file_to_extract.split('.')[0]}_{since_date}.csv"
-                new_file_path = os.path.join(output_path, new_file_name)
-                df.to_csv(new_file_path, index=False)
-                
-                print(f"Modified CSV file saved: {new_file_path}")
+#def yammer_extraction_api():
+    try:
+    
+        with open('config.yaml', 'r') as file:
+            config = yaml.safe_load(file)
+            # return config
+        
+        
+        # Connect to the Greenplum database
+        conn = psycopg2.connect(
+            host=config['host'],
+            port=config['port'],
+            database=config['database'],
+            user=config['user'],
+            password=config['password'],
+        )
+        
+        cursor = conn.cursor()
+        
+        query = 'select * from sor_yammer.ctl_yammer'
+        cursor.execute(query)
+        results = cursor.fetchall()
+        reference = pd.DataFrame(results)
+        column_names = [desc[0] for desc in cursor.description]
+        reference.columns = column_names
+        
+        
+        # List of table names
+        table_names = ['tags', 'Groups', 'Messages', 'Topics', 'Users']
+        
+        # Initialize the oldest date
+        oldest_date = None
+        
+        # Iterate over the table names and retrieve the maximum date for each table
+        for table_name in table_names:
+            query = f'select max("dateto") from sor_yammer.{table_name}'
+            cursor.execute(query)
+            result = cursor.fetchone()[0]
+            
+            if result is not None:
+                result_date = datetime.datetime.strptime(str(result)[:10], '%Y-%m-%d').date()
+                if oldest_date is None or result_date < oldest_date:
+                    oldest_date = result_date
+        
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
+        
+        
+        end_date = date.today()
+        start_date = oldest_date 
+        
+        # Bearer token for authentication
+        bearer_token = config['yammer_token']
+        # bearer_token = '39881-WpJ9XayUXeK6IVXSnvHg'
+        
+        # Specify your desired output path
+        output_path = config['output_directory']
+        
+        # Specify the CSV files to extract from each zip file
+        files_to_extract = ['Groups.csv', 'Tags.csv', 'Topics.csv']
+        
+        since_date = start_date
+        to_date = end_date
+        
+        url = f"https://www.yammer.com/api/v1/export?since={since_date}&until={to_date}"
+        headers = {
+            "Authorization": f"Bearer {bearer_token}"
+        }
+        
+        response = requests.get(url, headers=headers, verify=False)
+        
+        # Save the response content as a zip file
+        zip_filename = f"output_{to_date}.zip"
+        zip_filepath = os.path.join(output_path, zip_filename)
+        
+        
+        
+        with open(zip_filepath, 'wb') as f:
+            f.write(response.content)
+        
+        print(f"Zip file saved: {zip_filepath}")
+        
+        
+        # Extract specific CSV files from the zip file and modify them
+        with zipfile.ZipFile(zip_filepath, 'r') as zip_file:
+            for file_to_extract in files_to_extract:
+                if file_to_extract in zip_file.namelist():
+                    # Read the file from the zip without extracting it
+                    with zip_file.open(file_to_extract) as file:
+                        # Read the extracted CSV file into a DataFrame
+                        df = pd.read_csv(file)
+        
+                    # Add new columns to the DataFrame
+                    df['DateFrom'] = since_date
+                    df['DateTo'] = to_date
+                    df['ctl_ins_ts'] =  datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    df["ctl_elt_job_id"] = np.nan
+                    df["ctl_src_cd"] = "yammer"
+                    df["src_filename".upper()] = f"{file_to_extract.split('.')[0]}_{since_date}.csv"
+                    df['src_line_no'] = df.index
+                    for column_name in column_names:
+                        df[column_name.upper()] = np.nan
+                    # Save the DataFrame to a new CSV file
+                    new_file_name = f"{file_to_extract.split('.')[0]}_{to_date}.csv"
+                    new_file_path = os.path.join(output_path, new_file_name)
+                    df.to_csv(new_file_path, index=False)
+        
+                    print(f"Modified CSV file saved: {new_file_path}")
+                else:
+                    print(f"Skipping {file_to_extract} - File not found in the zip file.")
+        
+        # Delete the zip file
+        os.remove(zip_filepath)
+        print(f"Zip file deleted: {zip_filepath}")
+    except Exception as e:
+    # Log the error message
+        error_message = str(e)
+        logging.error("An error occurred during data retrieval and processing: %s", error_message)
+        raise Exception("An error occurred during data retrieval and processing: " + error_message)
